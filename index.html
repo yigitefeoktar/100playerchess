@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Infinite Chess Battle Royale</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --bg-glass: rgba(10, 15, 25, 0.9);
+      --border-cyan: rgba(0, 240, 255, 0.3);
+      --text-cyan: #00f0ff;
+      --text-white: #ffffff;
+      --font-main: 'Inter', system-ui, sans-serif;
+    }
+
+    body {
+      margin: 0;
+      overflow: hidden;
+      background-color: #050a0f;
+      /* Matches COLORS.BACKGROUND (Tile A) */
+      color: var(--text-white);
+      font-family: var(--font-main);
+      transition: background-color 0.3s ease, color 0.3s ease;
+    }
+
+    /* Light Mode Overrides */
+    body.light-mode {
+      --bg-glass: rgba(255, 255, 255, 0.75);
+      --border-cyan: rgba(148, 163, 184, 0.4);
+      --text-white: #0f172a;
+      --text-cyan: #0284c7;
+      background-color: #f1f5f9;
+    }
+
+    /* Tailor Tailwind classes for Light Mode specifically */
+    body.light-mode .text-white {
+      color: var(--text-white) !important;
+    }
+
+    body.light-mode .text-cyan-400 {
+      color: var(--text-cyan) !important;
+    }
+
+    body.light-mode .text-cyan-400\/70 {
+      color: rgba(2, 132, 199, 0.7) !important;
+    }
+
+    body.light-mode .text-slate-400 {
+      color: #64748b !important;
+    }
+
+    body.light-mode .text-slate-500 {
+      color: #475569 !important;
+    }
+
+    body.light-mode .text-cyan-200 {
+      color: #0369a1 !important;
+    }
+
+    body.light-mode .text-slate-300 {
+      color: #64748b !important;
+    }
+
+    body.light-mode .border-cyan-500\/20 {
+      border-color: rgba(0, 0, 0, 0.1) !important;
+    }
+
+    body.light-mode .border-cyan-500\/30 {
+      border-color: rgba(0, 0, 0, 0.15) !important;
+    }
+
+    body.light-mode .border-cyan-500\/50 {
+      border-color: rgba(0, 0, 0, 0.2) !important;
+    }
+
+    /* HUD Gradient override for Light Mode */
+    body.light-mode .bg-gradient-to-b {
+      background-image: linear-gradient(to bottom, rgba(241, 245, 249, 0.95), transparent) !important;
+    }
+
+    canvas {
+      display: block;
+    }
+
+    /* Glass Panel Utility */
+    .glass-panel {
+      background-color: var(--bg-glass);
+      border: 1px solid var(--border-cyan);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+      transition: background-color 0.3s ease, border-color 0.3s ease;
+    }
+
+    /* Button Reset & States */
+    button {
+      outline: none;
+    }
+
+    button:focus {
+      outline: none;
+      /* Ensure no background change on pure focus to prevent sticky look */
+    }
+
+    button:active {
+      transform: scale(0.98);
+    }
+
+    /* Custom Animations */
+    @keyframes modalPop {
+      0% {
+        opacity: 0;
+        transform: scale(0.5) translateY(50px);
+      }
+
+      60% {
+        opacity: 1;
+        transform: scale(1.05) translateY(-10px);
+      }
+
+      100% {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+      }
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        backdrop-filter: blur(0px);
+      }
+
+      to {
+        opacity: 1;
+        backdrop-filter: blur(4px);
+      }
+    }
+
+    @keyframes shimmer {
+      0% {
+        transform: translateX(-100%);
+      }
+
+      100% {
+        transform: translateX(100%);
+      }
+    }
+
+    @keyframes speed-pop {
+      0% {
+        transform: scale(1);
+      }
+
+      50% {
+        transform: scale(1.15);
+      }
+
+      100% {
+        transform: scale(1);
+      }
+    }
+
+    .animate-speed-pop {
+      animation: speed-pop 0.3s ease-out forwards;
+    }
+
+    .animate-modal-pop {
+      animation: modalPop 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    .animate-fade-in {
+      animation: fadeIn 0.6s ease-out forwards;
+    }
+
+    /* Glitch Effect */
+    .glitch-text {
+      position: relative;
+      animation: glitch-skew 3s infinite linear alternate-reverse;
+    }
+
+    .glitch-text::before,
+    .glitch-text::after {
+      content: attr(data-text);
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0.8;
+    }
+
+    .glitch-text::before {
+      left: 2px;
+      text-shadow: -2px 0 #00ffff;
+      clip-path: inset(0 0 0 0);
+      animation: glitch-anim-1 4s infinite linear alternate-reverse;
+    }
+
+    .glitch-text::after {
+      left: -2px;
+      text-shadow: -2px 0 #ff00ff;
+      clip-path: inset(0 0 0 0);
+      animation: glitch-anim-2 4s infinite linear alternate-reverse;
+    }
+
+    @keyframes glitch-skew {
+      0% {
+        transform: skew(0deg);
+      }
+
+      20% {
+        transform: skew(-1deg);
+      }
+
+      40% {
+        transform: skew(1deg);
+      }
+
+      60% {
+        transform: skew(0deg);
+      }
+
+      100% {
+        transform: skew(0deg);
+      }
+    }
+
+    @keyframes glitch-anim-1 {
+      0% {
+        clip-path: inset(20% 0 80% 0);
+      }
+
+      20% {
+        clip-path: inset(60% 0 10% 0);
+      }
+
+      40% {
+        clip-path: inset(10% 0 50% 0);
+      }
+
+      60% {
+        clip-path: inset(80% 0 5% 0);
+      }
+
+      80% {
+        clip-path: inset(30% 0 40% 0);
+      }
+
+      100% {
+        clip-path: inset(10% 0 60% 0);
+      }
+    }
+
+    @keyframes glitch-anim-2 {
+      0% {
+        clip-path: inset(10% 0 60% 0);
+      }
+
+      20% {
+        clip-path: inset(80% 0 5% 0);
+      }
+
+      40% {
+        clip-path: inset(30% 0 40% 0);
+      }
+
+      60% {
+        clip-path: inset(10% 0 50% 0);
+      }
+
+      80% {
+        clip-path: inset(60% 0 10% 0);
+      }
+
+      100% {
+        clip-path: inset(20% 0 80% 0);
+      }
+    }
+  </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.35.0"
+  }
+}
+</script>
+  <link rel="stylesheet" href="/index.css">
+</head>
+
+<body>
+  <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+
+</html>
