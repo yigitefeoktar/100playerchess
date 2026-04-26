@@ -650,7 +650,7 @@ export class GameEngine {
     }
 
     public spawnCoins(minX: number, maxX: number, minY: number, maxY: number) {
-        if (this.config.gameMode === 'STANDARD') return;
+        if (this.config.gameMode === 'STANDARD' || this.config.gameMode === 'FONT_TEST') return;
 
         for (let i = 0; i < 200; i++) {
             const x = Math.floor(minX + this.random() * (maxX - minX));
@@ -691,7 +691,7 @@ export class GameEngine {
         const createAttractPlayer = (id: string, color: string, centerX: number) => {
             this.players.set(id, {
                 id, isHuman: false, color, centerX, centerY: 0, isEliminated: false, units: [],
-                credits: 1000, totalCollected: 0, materialScore: 0, peakMaterial: 0, kills: 0, kingsKilled: 0, lastScoreTime: now,
+                credits: 1000, totalCollected: 0, materialScore: 0, peakMaterial: 0, kills: 0, kingsKilled: 0, unitsLost: 0, lastScoreTime: now,
                 aiState: AIState.SIEGE, lastAiUpdate: now - Math.random() * 2000, lastActionUpdate: now - Math.random() * 500,
                 lastRegroupTime: now, personality: BotPersonality.AGGRESSOR, chatMessage: null, chatTimer: 0,
                 lastSocialCheck: now, lastChatTime: 0, allies: [], enemies: [], diplomacyState: 'NEUTRAL',
@@ -781,7 +781,7 @@ export class GameEngine {
         if (this.config.gameMode === 'ZOMBIES') {
             this.players.set(ZOMBIE_TEAM_ID, {
                 id: ZOMBIE_TEAM_ID, isHuman: false, color: COLORS.ZOMBIE_GREEN, centerX: 0, centerY: 0, isEliminated: false,
-                units: [], credits: 0, totalCollected: 0, materialScore: 0, peakMaterial: 0, kills: 0, kingsKilled: 0, lastScoreTime: Date.now(),
+                units: [], credits: 0, totalCollected: 0, materialScore: 0, peakMaterial: 0, kills: 0, kingsKilled: 0, unitsLost: 0, lastScoreTime: Date.now(),
                 aiState: AIState.PANIC, allies: [], enemies: [], diplomacyState: 'WAR', personality: BotPersonality.NONE, chatMessage: null, chatTimer: 0,
                 lastActionTime: 0, actionDelay: 200, lastCombatTime: Date.now(),
                 lastMovedLane: 0, combatStartTime: Date.now(), totalWarActive: false
@@ -796,62 +796,93 @@ export class GameEngine {
 
         const profile = this.getDifficultyProfile();
 
-        for (let row = 0; row < 10; row++) {
-            for (let col = 0; col < 10; col++) {
-                const id = `player-${pid}`;
-                const isHuman = pid === humanIndex;
-                const centerX = (col - HALF_X) * SPACING_X;
-                const centerY = (row - HALF_Y) * SPACING_Y;
+        if (this.config.gameMode === 'FONT_TEST') {
+            const fontColors = ['#3b82f6', '#ef4444', '#10b981', '#eab308']; // Blue, Red, Green, Yellow
+
+            for (let i = 0; i < 16; i++) {
+                const id = `player-${i}`;
+                const isHuman = i === 0;
+
+                const col = i % 4; // Fonts
+                const row = Math.floor(i / 4); // Styles
+
+                if (isHuman) {
+                    this.humanId = id;
+                    this.config.humanColor = fontColors[col];
+                }
+                const centerX = (col - 1.5) * SPACING_X * 0.8;
+                const centerY = (row - 1.5) * SPACING_Y * 1.2;
                 const unitIds = this.generateArmy(id, centerX, centerY);
                 let initialScore = 0;
                 unitIds.forEach(uid => { const u = this.units.get(uid); if (u) initialScore += MATERIAL_VALUES[u.type] || 0; });
 
-                let color;
-                if (isHuman) {
-                    color = this.config.humanColor;
-                } else {
-                    let hue = Math.floor((pid * 137.508) % 360);
-
-                    // --- COLOR COLLISION AVOIDANCE ---
-                    const humanHue = this.hexToHue(this.config.humanColor);
-
-                    // If too close (within 35 degrees), shift by 180 (complementary) or at least 45
-                    let diff = Math.abs(hue - humanHue);
-                    if (diff > 180) diff = 360 - diff; // shortest arc
-
-                    if (diff < 35) {
-                        hue = (hue + 180) % 360; // Flip to opposite side
-                    }
-
-                    color = `hsl(${hue}, 75%, 50%)`;
-                }
-
-                let personality = BotPersonality.NONE;
-                if (!isHuman) {
-                    if (this.config.gameMode === 'BULLET') {
-                        personality = BotPersonality.AGGRESSOR;
-                    } else {
-                        const profile = this.getDifficultyProfile();
-                        const r = this.random();
-                        const w = profile.personalityWeights;
-                        if (r < w.aggressor) personality = BotPersonality.AGGRESSOR; else if (r < w.aggressor + w.turtle) personality = BotPersonality.TURTLE; else if (r < w.aggressor + w.turtle + w.scavenger) personality = BotPersonality.SCAVENGER; else personality = BotPersonality.AVENGER;
-                    }
-                }
-
                 this.players.set(id, {
-                    id, isHuman, color, centerX, centerY, isEliminated: false, units: unitIds, credits: 0, totalCollected: 0,
-                    materialScore: initialScore, peakMaterial: initialScore, kills: 0, kingsKilled: 0, lastScoreTime: now, aiState: AIState.SIEGE, aiTargetId: null,
-                    lastAiUpdate: now - Math.random() * 3000, lastRegroupTime: now, personality, chatMessage: null, chatTimer: 0, siegeStartTime: 0,
-                    currentSiegeTargetId: null, isHunting: false, lastSocialCheck: now - Math.random() * 2000, lastActionUpdate: now - Math.random() * 500, lastChatTime: 0,
+                    id, isHuman, color: fontColors[col], centerX, centerY, isEliminated: false, units: unitIds, credits: 0, totalCollected: 0,
+                    materialScore: initialScore, peakMaterial: initialScore, kills: 0, kingsKilled: 0, unitsLost: 0, lastScoreTime: now, aiState: AIState.IDLE, aiTargetId: null,
+                    lastAiUpdate: now, lastRegroupTime: now, personality: BotPersonality.NONE, chatMessage: null, chatTimer: 0, siegeStartTime: 0,
+                    currentSiegeTargetId: null, isHunting: false, lastSocialCheck: now, lastActionUpdate: now, lastChatTime: 0,
                     allies: [], enemies: [], diplomacyState: 'NEUTRAL',
-                    lastActionTime: 0,
-                    actionDelay: profile.reactionDelay,
-                    lastCombatTime: now,
-                    lastMovedLane: 0,
-                    combatStartTime: now,
-                    totalWarActive: false
+                    lastActionTime: 0, actionDelay: 1000, lastCombatTime: now, lastMovedLane: 0, combatStartTime: now, totalWarActive: false
                 });
-                pid++;
+            }
+        } else {
+            for (let row = 0; row < 10; row++) {
+                for (let col = 0; col < 10; col++) {
+                    const id = `player-${pid}`;
+                    const isHuman = pid === humanIndex;
+                    const centerX = (col - HALF_X) * SPACING_X;
+                    const centerY = (row - HALF_Y) * SPACING_Y;
+                    const unitIds = this.generateArmy(id, centerX, centerY);
+                    let initialScore = 0;
+                    unitIds.forEach(uid => { const u = this.units.get(uid); if (u) initialScore += MATERIAL_VALUES[u.type] || 0; });
+
+                    let color;
+                    if (isHuman) {
+                        color = this.config.humanColor;
+                    } else {
+                        let hue = Math.floor((pid * 137.508) % 360);
+
+                        // --- COLOR COLLISION AVOIDANCE ---
+                        const humanHue = this.hexToHue(this.config.humanColor);
+
+                        // If too close (within 35 degrees), shift by 180 (complementary) or at least 45
+                        let diff = Math.abs(hue - humanHue);
+                        if (diff > 180) diff = 360 - diff; // shortest arc
+
+                        if (diff < 35) {
+                            hue = (hue + 180) % 360; // Flip to opposite side
+                        }
+
+                        color = `hsl(${hue}, 75%, 50%)`;
+                    }
+
+                    let personality = BotPersonality.NONE;
+                    if (!isHuman) {
+                        if (this.config.gameMode === 'BULLET') {
+                            personality = BotPersonality.AGGRESSOR;
+                        } else {
+                            const profile = this.getDifficultyProfile();
+                            const r = this.random();
+                            const w = profile.personalityWeights;
+                            if (r < w.aggressor) personality = BotPersonality.AGGRESSOR; else if (r < w.aggressor + w.turtle) personality = BotPersonality.TURTLE; else if (r < w.aggressor + w.turtle + w.scavenger) personality = BotPersonality.SCAVENGER; else personality = BotPersonality.AVENGER;
+                        }
+                    }
+
+                    this.players.set(id, {
+                        id, isHuman, color, centerX, centerY, isEliminated: false, units: unitIds, credits: 0, totalCollected: 0,
+                        materialScore: initialScore, peakMaterial: initialScore, kills: 0, kingsKilled: 0, unitsLost: 0, lastScoreTime: now, aiState: AIState.SIEGE, aiTargetId: null,
+                        lastAiUpdate: now - Math.random() * 3000, lastRegroupTime: now, personality, chatMessage: null, chatTimer: 0, siegeStartTime: 0,
+                        currentSiegeTargetId: null, isHunting: false, lastSocialCheck: now - Math.random() * 2000, lastActionUpdate: now - Math.random() * 500, lastChatTime: 0,
+                        allies: [], enemies: [], diplomacyState: 'NEUTRAL',
+                        lastActionTime: 0,
+                        actionDelay: profile.reactionDelay,
+                        lastCombatTime: now,
+                        lastMovedLane: 0,
+                        combatStartTime: now,
+                        totalWarActive: false
+                    });
+                    pid++;
+                }
             }
         }
         this.spawnCoins(-120, 120, -80, 80);
@@ -1552,41 +1583,19 @@ export class GameEngine {
                 isHuman: p.isHuman,
                 color: p.color,
                 score: currentScore,
-                rank: 0,
-                isEliminated: p.isEliminated,
-                kills: p.kills
+                kills: p.kills,
+                kingsKilled: p.kingsKilled,
+                coins: p.credits,
+                unitsLost: p.unitsLost,
+                rank: 0, // Calculated in UI
+                isEliminated: p.isEliminated
             };
         });
 
-        // Sort by active status, then score, then kills
-        calculatedEntries.sort((a, b) => {
-            if (a.isEliminated !== b.isEliminated) return a.isEliminated ? 1 : -1;
-            if (a.score !== b.score) return b.score - a.score;
-
-            // Tie-breaker: Later timestamp is higher
-            const pA = this.players.get(a.playerId);
-            const pB = this.players.get(b.playerId);
-            if (pA && pB) {
-                return pB.lastScoreTime - pA.lastScoreTime;
-            }
-            return b.kills - a.kills;
-        });
-
-        // Assign Ranks
-        const finalEntries: LeaderboardEntry[] = calculatedEntries.map((e, index) => ({
-            playerId: e.playerId,
-            isHuman: e.isHuman,
-            color: e.color,
-            score: e.score,
-            rank: index + 1
-        }));
-
-        // Find human to include if not in top 8
-        const humanEntry = finalEntries.find(e => e.isHuman);
-        if (humanEntry && humanEntry.rank > 8) {
-            return [...finalEntries.slice(0, 7), humanEntry];
-        }
-        return finalEntries.slice(0, 8);
+        // We no longer sort, assign ranks, or slice to top 8 here in the Engine.
+        // We return the raw array of active players to the UI, so the UI can sort by Score or Kills
+        // and handle pinning the human player dynamically.
+        return calculatedEntries;
     }
 
     public consumeEvents(): GameEvent[] {
@@ -1707,7 +1716,10 @@ export class GameEngine {
                 target.isDead = true; targetDied = true; this.positionMap.delete(`${target.x},${target.y}`);
 
                 // UPDATE SCORE TIME FOR VICTIM
-                if (victimPlayer) victimPlayer.lastScoreTime = now;
+                if (victimPlayer) {
+                    victimPlayer.lastScoreTime = now;
+                    victimPlayer.unitsLost++;
+                }
 
                 if (killer) {
                     let scoreReward = MATERIAL_VALUES[target.type];

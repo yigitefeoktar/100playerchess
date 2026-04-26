@@ -4,9 +4,35 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="manifest" href="/manifest.json" />
   <title>Infinite Chess Battle Royale</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
+    /* Chess Fonts — downloaded and bundled for cross-platform consistency */
+    @font-face {
+      font-family: 'Chess Merida Unicode';
+      src: url('/fonts/chess-merida-unicode.ttf') format('truetype');
+      font-weight: 400;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    @font-face {
+      font-family: 'FreeSerif';
+      src: url('/fonts/free-serif.ttf') format('truetype');
+      font-weight: 400;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    @font-face {
+      font-family: 'FreeSans';
+      src: url('/fonts/free-sans.ttf') format('truetype');
+      font-weight: 400;
+      font-style: normal;
+      font-display: swap;
+    }
+
     :root {
       --bg-glass: rgba(10, 15, 25, 0.9);
       --border-cyan: rgba(0, 240, 255, 0.3);
@@ -172,6 +198,63 @@
 
     .animate-fade-in {
       animation: fadeIn 0.6s ease-out forwards;
+    }
+
+    /* iPhone-style Notification */
+    @keyframes notif-slide-in {
+      0% {
+        opacity: 0;
+        transform: translateY(-100%) scale(0.85);
+      }
+
+      50% {
+        opacity: 1;
+        transform: translateY(4px) scale(1.02);
+      }
+
+      70% {
+        transform: translateY(-2px) scale(1);
+      }
+
+      100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    @keyframes notif-slide-out {
+      0% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+
+      100% {
+        opacity: 0;
+        transform: translateY(-100%) scale(0.85);
+      }
+    }
+
+    .notif-enter {
+      animation: notif-slide-in 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    }
+
+    .notif-exit {
+      animation: notif-slide-out 0.3s cubic-bezier(0.55, 0, 1, 0.45) forwards;
+    }
+
+    .notif-pill {
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(0, 240, 255, 0.15);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-radius: 999px;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4), 0 0 8px rgba(0, 240, 255, 0.08);
+    }
+
+    body.light-mode .notif-pill {
+      background: rgba(255, 255, 255, 0.85);
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.08);
     }
 
     /* Glitch Effect */

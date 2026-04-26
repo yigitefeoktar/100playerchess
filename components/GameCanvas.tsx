@@ -4,6 +4,9 @@ import { GameEngine } from '../services/gameEngine';
 import { TILE_SIZE, COLORS, UNIT_ICONS, ZOMBIE_ICONS, COOLDOWNS } from '../constants';
 import { Coords, SelectionBox, UnitType, GameEventType, TerrainType } from '../types';
 import { useSound } from '../sound';
+import { drawTree, drawMountain, drawWater, drawSandGround, drawSnowGround, drawGrassGround } from '../rendering/TerrainRenderer';
+import { drawUnit } from '../rendering/UnitRenderer';
+import { getBiomeConfig } from '../rendering/biomes';
 
 export interface GameCanvasRef {
     resetCamera: () => void;
@@ -775,8 +778,10 @@ const GameCanvasComponent = forwardRef<GameCanvasRef, GameCanvasProps>(({ engine
             }
         }
 
-        // Update Engine
-        engine.tick();
+        // Update Engine (freeze in FONT_TEST mode)
+        if (engine.config.gameMode !== 'FONT_TEST') {
+            engine.tick();
+        }
 
         // Consume Events (Particles)
         const events = engine.consumeEvents();
@@ -941,9 +946,10 @@ const GameCanvasComponent = forwardRef<GameCanvasRef, GameCanvasProps>(({ engine
             });
         }
 
-        // Theme Colors
-        const tileA = isLightMode ? COLORS.LIGHT_BACKGROUND : COLORS.BACKGROUND;
-        const tileB = isLightMode ? COLORS.LIGHT_GRID : COLORS.GRID;
+        // Theme Colors — biome overrides board colors
+        const activeBiome = engine.config.mapType ? getBiomeConfig(engine.config.mapType as any) : undefined;
+        const tileA = activeBiome ? activeBiome.tileA : (isLightMode ? COLORS.LIGHT_BACKGROUND : COLORS.BACKGROUND);
+        const tileB = activeBiome ? activeBiome.tileB : (isLightMode ? COLORS.LIGHT_GRID : COLORS.GRID);
 
         // Clear with Background (Tile A)
         ctx.fillStyle = tileA;
@@ -977,13 +983,8 @@ const GameCanvasComponent = forwardRef<GameCanvasRef, GameCanvasProps>(({ engine
             }
         }
 
-        // Draw Terrain Layer (Rocks, Trees, Sand, etc.)
+        // Draw Terrain Layer — canvas vector art replaces emoji
         if (engine.terrainMap && engine.terrainMap.size > 0) {
-            const terrainFontSize = Math.round(TILE_SIZE * 0.7);
-            ctx.font = `${terrainFontSize}px serif`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-
             for (let x = startCol; x <= endCol; x++) {
                 for (let y = startRow; y <= endRow; y++) {
                     const tile = engine.terrainMap.get(`${x},${y}`);
@@ -992,18 +993,32 @@ const GameCanvasComponent = forwardRef<GameCanvasRef, GameCanvasProps>(({ engine
                     const px = x * TILE_SIZE;
                     const py = y * TILE_SIZE;
 
-                    // Draw background tint
-                    if (tile.color) {
-                        ctx.fillStyle = isLightMode
-                            ? tile.color + '40'  // 25% opacity in light mode
-                            : tile.color + '80';  // 50% opacity in dark mode
-                        ctx.fillRect(px, py, TILE_SIZE, TILE_SIZE);
-                    }
-
-                    // Draw icon (emoji) for walls and forests
-                    if (tile.icon) {
-                        ctx.fillStyle = '#ffffff';
-                        ctx.fillText(tile.icon, px + TILE_SIZE / 2, py + TILE_SIZE / 2 + 2);
+                    // Draw terrain using canvas vector art based on type
+                    switch (tile.type) {
+                        case TerrainType.FOREST:
+                            drawTree(ctx, px, py, TILE_SIZE);
+                            break;
+                        case TerrainType.WALL:
+                            drawMountain(ctx, px, py, TILE_SIZE);
+                            break;
+                        case TerrainType.WATER:
+                            drawWater(ctx, px, py, TILE_SIZE, nowReal);
+                            break;
+                        case TerrainType.SAND:
+                            drawSandGround(ctx, px, py, TILE_SIZE);
+                            break;
+                        case TerrainType.SNOW:
+                            drawSnowGround(ctx, px, py, TILE_SIZE);
+                            break;
+                        default:
+                            // Fallback: draw background tint if available
+                            if (tile.color) {
+                                ctx.fillStyle = isLightMode
+                                    ? tile.color + '40'
+                                    : tile.color + '80';
+                                ctx.fillRect(px, py, TILE_SIZE, TILE_SIZE);
+                            }
+                            break;
                     }
                 }
             }
@@ -1018,6 +1033,15 @@ const GameCanvasComponent = forwardRef<GameCanvasRef, GameCanvasProps>(({ engine
             selectedUnitIds.current.forEach(unitId => {
                 const unit = engine.units.get(unitId);
                 if (!unit || unit.isDead) return;
+
+                // Get Render State to check for sliding
+                const visual = renderEntities.current.get(unit.id);
+                const targetX = unit.x * TILE_SIZE;
+                const targetY = unit.y * TILE_SIZE;
+
+                // Suppress highlights if the unit is still visually sliding to its logical position
+                const isSliding = visual && (Math.abs(visual.x - targetX) > 2 || Math.abs(visual.y - targetY) > 2);
+                if (isSliding) return;
 
                 // Get moves regardless of cooldown for highlighting
                 const moves = engine.getUnitPossibleMoves(unitId, false);
@@ -1093,19 +1117,10 @@ const GameCanvasComponent = forwardRef<GameCanvasRef, GameCanvasProps>(({ engine
 
             ctx.strokeStyle = color;
             ctx.lineWidth = 1;
+            ctx.lineCap = 'square';
             ctx.stroke();
         };
 
-        for (const [key, color] of uniqueHighlights) {
-            const [xStr, yStr] = key.split(',');
-            drawTileHighlight(parseInt(xStr), parseInt(yStr), color);
-        }
-
-        if (shopSelection && validSpawnTiles.current.length > 0) {
-            for (const tile of validSpawnTiles.current) {
-                drawTileHighlight(tile.x, tile.y, COLORS.VALID_SPAWN);
-            }
-        }
 
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -1206,6 +1221,34 @@ const GameCanvasComponent = forwardRef<GameCanvasRef, GameCanvasProps>(({ engine
         }
 
         ctx.restore();
+
+        // === HIGHLIGHT LAYER (Dedicated Pass — Immediately Before Units) ===
+        // Re-enter world space ONLY for highlights, so they are the last
+        // world-space draw before units. This guarantees z-order.
+        ctx.save();
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+        ctx.scale(z, z);
+        ctx.translate(-camera.x, -camera.y);
+
+        for (const [key, color] of uniqueHighlights) {
+            const [xStr, yStr] = key.split(',');
+            drawTileHighlight(parseInt(xStr), parseInt(yStr), color);
+        }
+
+        if (shopSelection && validSpawnTiles.current.length > 0) {
+            for (const tile of validSpawnTiles.current) {
+                drawTileHighlight(tile.x, tile.y, COLORS.VALID_SPAWN);
+            }
+        }
+
+        ctx.restore();
+        // === END HIGHLIGHT LAYER ===
+
+        // Defensive reset: ensure no state bleeds into unit drawing
+        ctx.globalAlpha = 1.0;
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
+        ctx.globalCompositeOperation = 'source-over';
 
         // --- Draw Units with Visual Interpolation ---
         const fontScale = TILE_SIZE * 0.8;
@@ -1312,45 +1355,13 @@ const GameCanvasComponent = forwardRef<GameCanvasRef, GameCanvasProps>(({ engine
                 ctx.stroke();
             }
 
-            // 2. Draw Unit Icon
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-
-            const fontSize = Math.floor(TILE_SIZE * 0.7 * z);
-            ctx.font = `${fontSize}px "Segoe UI Symbol", "DejaVu Sans", Symbola, Arial, sans-serif`;
-
-            const icon = unit.isZombie ? ZOMBIE_ICONS[unit.type] : UNIT_ICONS[unit.type];
+            // 2. Draw Unit — Canvas Vector Art
             const owner = engine.players.get(unit.ownerId);
+            const unitColor = unit.isZombie ? COLORS.ZOMBIE_GREEN : (owner ? owner.color : '#888888');
 
-            // Zombie Glitch / Color Logic
-            if (unit.isZombie) {
-                ctx.fillStyle = COLORS.ZOMBIE_GREEN;
-                if (Math.random() < 0.1) ctx.fillStyle = '#fff';
-            } else {
-                ctx.fillStyle = owner ? owner.color : '#888888';
-            }
-
-            // Neon Glow (Backlight)
-            if (z > 0.2) {
-                // Determine glow color
-                const glowColor = unit.isZombie ? COLORS.ZOMBIE_GREEN : (owner ? owner.color : '#888888');
-                ctx.shadowColor = glowColor;
-                ctx.shadowBlur = 10 * z; // Scale blur with zoom
-                ctx.shadowOffsetX = 0;
-                ctx.shadowOffsetY = 0;
-            } else {
-                ctx.shadowColor = 'transparent';
-                ctx.shadowBlur = 0;
-            }
-
-            // Draw at integerScreenX/Y (which are screen coordinates)
-            ctx.fillText(icon, integerScreenX, integerScreenY + (glyphOffsets.current[unit.type] || 0) * z);
-
-            // Reset Shadow
-            ctx.shadowColor = 'transparent';
-            ctx.shadowBlur = 0;
-            ctx.shadowOffsetX = 0;
-            ctx.shadowOffsetY = 0;
+            // Draw canvas vector piece at screen coordinates
+            const unitSize = TILE_SIZE * z;
+            drawUnit(ctx, unit.type, integerScreenX, integerScreenY, unitSize, unitColor, unit.isZombie);
 
             // 3. Cooldown Ring (Drawn in Screen Space)
             const elapsed = now - unit.lastMoveTime;
@@ -1363,22 +1374,12 @@ const GameCanvasComponent = forwardRef<GameCanvasRef, GameCanvasProps>(({ engine
                 // Draw around the screen position
                 ctx.arc(integerScreenX, integerScreenY, radius, -Math.PI / 2, (-Math.PI / 2) + (Math.PI * 2 * ratio));
 
-                // Color-coded Ring with Glow
+                // Color-coded Ring
                 const ringColor = unit.isZombie ? COLORS.ZOMBIE_GREEN : (owner ? owner.color : '#ffffff');
                 ctx.strokeStyle = ringColor;
                 ctx.lineWidth = Math.max(1, 2.5 * z); // Slightly thinner
 
-                // Add glow to ring
-                if (z > 0.2) {
-                    ctx.shadowColor = ringColor;
-                    ctx.shadowBlur = 5 * z;
-                }
-
                 ctx.stroke();
-
-                // Reset shadow after ring
-                ctx.shadowColor = 'transparent';
-                ctx.shadowBlur = 0;
             }
 
             ctx.restore();
@@ -1389,27 +1390,24 @@ const GameCanvasComponent = forwardRef<GameCanvasRef, GameCanvasProps>(({ engine
                 // Reset transform for screen space drawing
                 ctx.setTransform(1, 0, 0, 1, 0, 0);
 
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                const fontSize = Math.floor(TILE_SIZE * 0.7 * z);
-                ctx.font = `${fontSize}px "Segoe UI Symbol", "DejaVu Sans", Symbola, Arial, sans-serif`;
-
                 // Calculate screen position
-                const centerX = visual.x + TILE_SIZE / 2;
-                const centerY = visual.y + TILE_SIZE / 2;
-                const screenX = Math.round((centerX - camera.x) * z + canvas.width / 2);
-                const screenY = Math.round((centerY - camera.y) * z + canvas.height / 2);
+                const flashCenterX = visual.x + TILE_SIZE / 2;
+                const flashCenterY = visual.y + TILE_SIZE / 2;
+                const flashScreenX = Math.round((flashCenterX - camera.x) * z + canvas.width / 2);
+                const flashScreenY = Math.round((flashCenterY - camera.y) * z + canvas.height / 2);
 
                 ctx.globalAlpha = visual.flash;
-                ctx.fillStyle = visual.flashColor || '#ffffff';
-                const icon = unit.isZombie ? ZOMBIE_ICONS[unit.type] : UNIT_ICONS[unit.type];
-                ctx.fillText(icon, screenX, screenY + (glyphOffsets.current[unit.type] || 0) * z);
+                const flashColor = visual.flashColor || '#ffffff';
+                const flashSize = TILE_SIZE * z;
+                drawUnit(ctx, unit.type, flashScreenX, flashScreenY, flashSize, flashColor, unit.isZombie);
 
                 ctx.restore();
 
                 visual.flash = Math.max(0, visual.flash - 0.05 * engine.timeMultiplier);
             }
         }
+
+        // FONT_TEST labels removed
 
         // ... (Chat bubble and particle rendering remains the same)
         // --- CHAT BUBBLES RENDER PASS ---

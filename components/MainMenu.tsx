@@ -18,6 +18,30 @@ export const MainMenu: React.FC<MainMenuProps> = ({ config, setConfig, onDeploy,
     const { isSoundEnabled, toggleSound, playSound } = useSound();
     const [scale, setScale] = useState(1);
     const [isModeSelectorOpen, setIsModeSelectorOpen] = useState(false);
+    const [isFullscreen, setIsFullscreen] = useState(false);
+
+    const toggleFullscreen = () => {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch((err) => {
+                console.error(`Error attempting to enable fullscreen: ${err.message}`);
+            });
+            setIsFullscreen(true);
+        } else {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+                setIsFullscreen(false);
+            }
+        }
+    };
+
+    const handleStart = () => {
+        // Auto-fullscreen on mobile
+        const isMobile = window.innerWidth <= 768;
+        if (isMobile && !document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(() => { });
+        }
+        onDeploy();
+    };
 
     // Auto-scale logic to fit screen
     useEffect(() => {
@@ -219,7 +243,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({ config, setConfig, onDeploy,
                     {/* Deploy Button */}
                     <button
                         onClick={() => {
-                            onDeploy();
+                            handleStart();
                             playSound('start_game');
                         }}
                         className="
@@ -309,6 +333,32 @@ export const MainMenu: React.FC<MainMenuProps> = ({ config, setConfig, onDeploy,
 
                 </div>
             </div>
+
+            {/* Absolute Fullscreen Toggle (Top-Right Screen Corner) */}
+            <button
+                onClick={() => {
+                    toggleFullscreen();
+                    playSound('click');
+                }}
+                className={`
+                    fixed top-4 right-4 z-[60] flex items-center justify-center gap-2 px-4 py-2 rounded-xl transition-all duration-300 border backdrop-blur-md pointer-events-auto
+                    group active:scale-95 active:brightness-150
+                    ${isLightMode
+                        ? 'bg-white/80 text-blue-600 border-blue-200 hover:bg-white hover:shadow-[0_0_20px_rgba(37,99,235,0.3)] hover:border-blue-400'
+                        : 'bg-black/60 text-cyan-400 border-cyan-500/40 shadow-[0_0_10px_rgba(0,240,255,0.1)] hover:shadow-[0_0_25px_rgba(0,240,255,0.4)] hover:border-cyan-300 hover:text-white'}
+                    ${isFullscreen ? 'ring-2 ring-cyan-500 border-cyan-400 shadow-[0_0_20px_rgba(0,240,255,0.3)]' : ''}
+                `}
+                title={t('menu.fullscreen')}
+            >
+                <div className="relative w-5 h-5 flex items-center justify-center transition-transform duration-300 group-hover:scale-110">
+                    {isFullscreen ? (
+                        <svg className="absolute" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3" /><path d="M21 8h-3a2 2 0 0 1-2-2V3" /><path d="M3 16h3a2 2 0 0 1 2 2v3" /><path d="M16 21v-3a2 2 0 0 1 2-2h3" /></svg>
+                    ) : (
+                        <svg className="absolute" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3" /><path d="M21 8V5a2 2 0 0 0-2-2h-3" /><path d="M3 16v3a2 2 0 0 0 2 2h3" /><path d="M16 21h3a2 2 0 0 0 2-2v-3" /></svg>
+                    )}
+                </div>
+                <span className="text-xs font-black uppercase tracking-widest hidden sm:inline">{t('menu.fullscreen')}</span>
+            </button>
         </div>
     );
 };

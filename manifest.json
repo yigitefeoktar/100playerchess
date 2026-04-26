@@ -1,0 +1,17 @@
+{
+    "name": "Infinite Chess Battle Royale",
+    "short_name": "Infinite Chess",
+    "description": "A massive multiplayer chess battle royale game.",
+    "start_url": "/",
+    "display": "standalone",
+    "orientation": "landscape",
+    "background_color": "#050a0f",
+    "theme_color": "#00f0ff",
+    "icons": [
+        {
+            "src": "favicon.ico",
+            "sizes": "64x64 32x32 24x24 16x16",
+            "type": "image/x-icon"
+        }
+    ]
+}

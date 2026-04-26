@@ -23,6 +23,7 @@ const translations: Translations = {
     'menu.start': { en: 'Start the Game', tr: 'Oyunu Başlat' },
     'menu.darkMode': { en: 'Dark Mode', tr: 'Karanlık Mod' },
     'menu.lightMode': { en: 'Light Mode', tr: 'Aydınlık Mod' },
+    'menu.fullscreen': { en: 'Fullscreen', tr: 'Tam Ekran' },
 
     // Game Modes
     'mode.standard': { en: 'STANDARD', tr: 'STANDART' },
@@ -69,6 +70,15 @@ const translations: Translations = {
     'confirm.mainMenu': { en: 'Return to Main Menu?', tr: 'Ana Menüye Dön?' },
     'confirm.yes': { en: 'Yes', tr: 'Evet' },
     'confirm.no': { en: 'No', tr: 'Hayır' },
+
+    // Notification Tips
+    'tip.openShop': { en: 'Double-click an empty tile to open the Shop', tr: 'Mağazayı açmak için boş bir kareye çift tıklayın' },
+    'tip.findUnits': { en: 'Click your name on the Leaderboard to find your units', tr: 'Birimlerinizi bulmak için Skor Tablosunda adınıza tıklayın' },
+    'tip.shopDrag': { en: 'Drag across the board to place multiple units at once', tr: 'Birden fazla birim yerleştirmek için tahta üzerinde sürükleyin' },
+
+    // Orientation
+    'orientation.rotate': { en: 'PLEASE ROTATE YOUR DEVICE', tr: 'LÜTFEN CİHAZI DÖNDÜRÜN' },
+    'orientation.message': { en: 'This game is optimized for landscape mode only. Please turn your phone sideways.', tr: 'Bu oyun sadece yatay mod için optimize edilmiştir. Lütfen telefonu yan çevirin.' },
 };
 
 interface I18nContextType {

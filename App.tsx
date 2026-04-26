@@ -13,6 +13,7 @@ import { SandboxToolbar } from './components/SandboxToolbar';
 import { SandboxMode } from './logic/SandboxMode';
 import { useTranslation } from './i18n';
 import { useSound } from './sound';
+import { OrientationOverlay } from './components/OrientationOverlay';
 
 const App: React.FC = () => {
     const { t } = useTranslation();
@@ -21,6 +22,7 @@ const App: React.FC = () => {
     const [stats, setStats] = useState<Partial<GameStats>>({ playersRemaining: 100, leaderboard: [], credits: 0 });
     const [showHelp, setShowHelp] = useState(false);
     const [showLeaderboard, setShowLeaderboard] = useState(true);
+    const [isEnginePaused, setIsEnginePaused] = useState(false);
     const [showMinimap, setShowMinimap] = useState(true);
     const [showShop, setShowShop] = useState(false);
     const [selectedShopUnit, setSelectedShopUnit] = useState<UnitType | null>(null);
@@ -64,6 +66,13 @@ const App: React.FC = () => {
     // Flash state for buttons
     const [flashingBtn, setFlashingBtn] = useState<string | null>(null);
 
+    // Notification Tip State (iPhone-style)
+    const [notifText, setNotifText] = useState<string | null>(null);
+    const [notifExiting, setNotifExiting] = useState(false);
+    const notifTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const lastNotifKey = useRef<string | null>(null);
+    const [unitsOffScreenSec, setUnitsOffScreenSec] = useState(0);
+
     // Refs for click-outside detection
     const helpRef = useRef<HTMLDivElement>(null);
     const helpBtnRef = useRef<HTMLButtonElement>(null);
@@ -105,6 +114,7 @@ const App: React.FC = () => {
         setIsSpectating(false);
         setGameStarted(true);
         setTimeMultiplier(1);
+        setIsEnginePaused(false);
         setGameId(prev => prev + 1);
 
         // Adjust Zoom for Asymmetrical Map (Wider view)
@@ -126,6 +136,7 @@ const App: React.FC = () => {
         setSpectatorWinner(null);
         setIsSpectating(false);
         setTimeMultiplier(1);
+        setIsEnginePaused(false);
         if (gameOverTimerRef.current) {
             clearTimeout(gameOverTimerRef.current);
             gameOverTimerRef.current = null;
@@ -140,6 +151,7 @@ const App: React.FC = () => {
         setSpectatorWinner(null);
         setIsSpectating(false);
         setTimeMultiplier(1);
+        setIsEnginePaused(false);
         setStats({ playersRemaining: 100, leaderboard: [], credits: 0 });
         setShowResignConfirm(false);
         setShowMainMenuConfirm(false);
@@ -242,6 +254,28 @@ const App: React.FC = () => {
         }
     }, [isSpectating, stats.playersRemaining, spectatorWinner, playSound]);
 
+    // Handle Auto-Pause when Shop Opens
+    useEffect(() => {
+        if (!engineRef.current || !gameStarted || isSpectating || stats.gameOver) return;
+
+        if (showShop) {
+            engineRef.current.setPaused(true);
+        } else if (!isEnginePaused) { // Only unpause if not manually paused
+            engineRef.current.setPaused(false);
+        }
+    }, [showShop, isEnginePaused, gameStarted, isSpectating, stats.gameOver]);
+
+    // Apply manual pause state to engine
+    useEffect(() => {
+        if (!engineRef.current || !gameStarted || stats.gameOver) return;
+
+        // If shop is open, we force pause regardless of manual state. 
+        // We only apply manual pause state if the shop is NOT open.
+        if (!showShop) {
+            engineRef.current.setPaused(isEnginePaused);
+        }
+    }, [isEnginePaused, gameStarted, stats.gameOver, showShop]);
+
     // Handle outside clicks to close help
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent | TouchEvent) => {
@@ -261,6 +295,108 @@ const App: React.FC = () => {
             document.removeEventListener('touchstart', handleClickOutside);
         };
     }, [showHelp]);
+
+    // Track how long player units have been off-screen
+    useEffect(() => {
+        if (!gameStarted || isSpectating) return;
+
+        const interval = setInterval(() => {
+            const engine = engineRef.current;
+            if (!engine || engine.isAttractMode) return;
+
+            const human = engine.players.get(engine.humanId);
+            if (!human || human.isEliminated) return;
+
+            const cam = cameraRef.current;
+            const z = zoomRef.current;
+            const halfW = (window.innerWidth / 2) / z;
+            const halfH = (window.innerHeight / 2) / z;
+            const viewLeft = cam.x - halfW;
+            const viewRight = cam.x + halfW;
+            const viewTop = cam.y - halfH;
+            const viewBottom = cam.y + halfH;
+
+            let anyVisible = false;
+            for (const unitId of human.units) {
+                const unit = engine.units.get(unitId);
+                if (!unit) continue;
+                const px = unit.x * TILE_SIZE + TILE_SIZE / 2;
+                const py = unit.y * TILE_SIZE + TILE_SIZE / 2;
+                if (px >= viewLeft && px <= viewRight && py >= viewTop && py <= viewBottom) {
+                    anyVisible = true;
+                    break;
+                }
+            }
+
+            if (anyVisible) {
+                setUnitsOffScreenSec(0);
+            } else {
+                setUnitsOffScreenSec(prev => prev + 1);
+            }
+        }, 1000);
+
+        return () => clearInterval(interval);
+    }, [gameStarted, isSpectating]);
+
+    // Notification Tip Logic (iPhone-style auto-dismiss)
+    useEffect(() => {
+        // Determine current tip (priority order: findUnits > openShop)
+        let tipKey: string | null = null;
+        let tipText: string | null = null;
+
+        if (!isSpectating && !stats.gameOver) {
+            // Highest priority: units off-screen for 4+ seconds
+            if (unitsOffScreenSec >= 4) {
+                tipKey = 'findUnits';
+                tipText = t('tip.findUnits');
+            }
+            // Medium priority: shop is open — drag tip
+            else if (showShop) {
+                tipKey = 'shopDrag';
+                tipText = t('tip.shopDrag');
+            }
+            // Lower priority: can afford shop
+            else if ((stats.credits || 0) >= 2) {
+                tipKey = 'openShop';
+                tipText = t('tip.openShop');
+            }
+        }
+
+        // If a new tip should show (and it's different from what's already been shown)
+        if (tipKey && tipKey !== lastNotifKey.current) {
+            // Clear any existing dismiss timer
+            if (notifTimerRef.current) clearTimeout(notifTimerRef.current);
+
+            lastNotifKey.current = tipKey;
+            setNotifExiting(false);
+            setNotifText(tipText);
+
+            // Auto-dismiss after 10 seconds
+            notifTimerRef.current = setTimeout(() => {
+                setNotifExiting(true);
+                // Remove from DOM after exit animation completes (300ms)
+                setTimeout(() => {
+                    setNotifText(null);
+                    setNotifExiting(false);
+                }, 300);
+            }, 10000);
+        }
+
+        // If conditions no longer met, dismiss immediately
+        if (!tipKey && notifText) {
+            if (notifTimerRef.current) clearTimeout(notifTimerRef.current);
+            setNotifExiting(true);
+            notifTimerRef.current = setTimeout(() => {
+                setNotifText(null);
+                setNotifExiting(false);
+                lastNotifKey.current = null;
+            }, 300);
+        }
+
+        return () => {
+            if (notifTimerRef.current) clearTimeout(notifTimerRef.current);
+        };
+    }, [stats.credits, stats.gameOver, showShop, isSpectating, unitsOffScreenSec, t]);
 
     // Unified interaction handler for top bar buttons
     const handleInteraction = (e: React.MouseEvent<HTMLButtonElement>, animationId: string | null, action: () => void) => {
@@ -389,12 +525,19 @@ const App: React.FC = () => {
                             )}
                         </div>
 
-                        {/* Center: Spectator Label */}
-                        {isSpectating && (
-                            <div className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 text-cyan-500/50 font-bold tracking-[0.2em] uppercase text-sm pointer-events-none select-none drop-shadow-md">
-                                Spectator Mode
-                            </div>
-                        )}
+                        {/* Center: Notification Tips / Spectator Label */}
+                        <div className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 pointer-events-none select-none">
+                            {isSpectating ? (
+                                <div className="text-cyan-500/50 font-bold tracking-[0.2em] uppercase text-sm drop-shadow-md">
+                                    Spectator Mode
+                                </div>
+                            ) : notifText ? (
+                                <div className={`notif-pill px-4 py-1.5 flex items-center gap-2 ${notifExiting ? 'notif-exit' : 'notif-enter'}`}>
+                                    <span className="text-amber-400 text-sm">💡</span>
+                                    <span className="text-cyan-300/80 text-xs font-medium tracking-wide whitespace-nowrap">{notifText}</span>
+                                </div>
+                            ) : null}
+                        </div>
 
                         {/* Right: Actions */}
                         <div className="flex items-center gap-2 pointer-events-auto">
@@ -452,44 +595,64 @@ const App: React.FC = () => {
                                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" /><path d="M12 17h.01" /></svg>
                                     </button>
 
-                                    {/* Resign Button - Top Right */}
-                                    <button
-                                        onClick={(e) => handleInteraction(e, 'resign', () => setShowResignConfirm(true))}
-                                        className={`p-2 rounded transition-all duration-200 
-                                text-red-400/70 hover:text-red-400 hover:bg-red-500/10
-                                ${flashingBtn === 'resign' ? 'scale-110' : ''}`}
-                                        title="Resign"
-                                    >
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                            <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
-                                            <line x1="4" y1="22" x2="4" y2="15" />
-                                        </svg>
-                                    </button>
                                 </>
-                            ) : (
-                                /* Spectator Speed Control & Main Menu */
-                                <div className="flex items-center gap-1">
+                            ) : null}
+
+                            {/* Speed & Pause Controls (Available to all) */}
+                            <div className="flex items-center gap-1">
+                                {(!stats.gameOver || isSpectating) && (
                                     <button
-                                        key={`speed-btn-${timeMultiplier}`}
                                         onClick={() => {
-                                            const next = timeMultiplier === 1 ? 5 : timeMultiplier === 5 ? 10 : 1;
-                                            setTimeMultiplier(next);
-                                            if (engineRef.current) engineRef.current.timeMultiplier = next;
+                                            setIsEnginePaused(!isEnginePaused);
                                             playSound('click');
                                         }}
-                                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition-all animate-speed-pop
-                                            ${timeMultiplier > 1
-                                                ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 shadow-[0_0_15px_rgba(34,211,238,0.3)]'
+                                        className={`flex items-center justify-center w-8 h-8 rounded-full border transition-all
+                                            ${isEnginePaused
+                                                ? 'bg-amber-500/20 border-amber-400 text-amber-300 shadow-[0_0_15px_rgba(245,158,11,0.3)]'
                                                 : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
                                             }
                                         `}
+                                        title={isEnginePaused ? "Resume Game" : "Pause Game"}
                                     >
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={timeMultiplier === 10 ? 'animate-pulse' : ''}>
-                                            <polygon points="13 19 22 12 13 5 13 19" /><polygon points="2 19 11 12 2 5 2 19" />
-                                        </svg>
-                                        <span className="text-[10px] font-black uppercase tracking-widest">{timeMultiplier}x Speed</span>
+                                        {isEnginePaused ? (
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="translate-x-[1px]"><polygon points="5 3 19 12 5 21 5 3" /></svg>
+                                        ) : (
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" /></svg>
+                                        )}
                                     </button>
+                                )}
 
+                                <button
+                                    key={`speed-btn-${timeMultiplier}`}
+                                    onClick={() => {
+                                        let next = 1;
+                                        if (isSpectating) {
+                                            next = timeMultiplier === 1 ? 5 : timeMultiplier === 5 ? 10 : 1;
+                                        } else {
+                                            next = timeMultiplier === 1 ? 2 : timeMultiplier === 2 ? 4 : 1;
+                                        }
+                                        setTimeMultiplier(next);
+                                        if (engineRef.current) engineRef.current.timeMultiplier = next;
+                                        playSound('click');
+                                    }}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition-all animate-speed-pop
+                                        ${timeMultiplier > 1
+                                            ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 shadow-[0_0_15px_rgba(34,211,238,0.3)]'
+                                            : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
+                                        }
+                                    `}
+                                    title="Game Speed"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={timeMultiplier >= 5 ? 'animate-pulse' : ''}>
+                                        <polygon points="13 19 22 12 13 5 13 19" /><polygon points="2 19 11 12 2 5 2 19" />
+                                    </svg>
+                                    <span className="text-[10px] font-black uppercase tracking-widest">{timeMultiplier}x</span>
+                                </button>
+                            </div>
+
+                            {/* Far Right Action: Main Menu (Spectator) OR Resign (Player) */}
+                            {isSpectating ? (
+                                <>
                                     <div className="h-4 w-px bg-white/5 mx-1"></div>
 
                                     <button
@@ -505,10 +668,28 @@ const App: React.FC = () => {
                                             <line x1="21" y1="12" x2="9" y2="12" />
                                         </svg>
                                     </button>
-                                </div>
-                            )}
+                                </>
+                            ) : (!stats.gameOver && (
+                                <>
+                                    <div className="h-4 w-px bg-white/5 mx-1"></div>
+
+                                    <button
+                                        onClick={(e) => handleInteraction(e, 'resign', () => setShowResignConfirm(true))}
+                                        className={`p-2 rounded transition-all duration-200 
+                                            text-red-400/70 hover:text-red-400 hover:bg-red-500/10
+                                            ${flashingBtn === 'resign' ? 'scale-110' : ''}`}
+                                        title="Resign"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+                                            <line x1="4" y1="22" x2="4" y2="15" />
+                                        </svg>
+                                    </button>
+                                </>
+                            ))}
                         </div>
                     </div>
+
 
                     {/* Diplomacy Context Menu */}
                     {contextMenu && (
@@ -687,7 +868,8 @@ const App: React.FC = () => {
                             setBrushSize={setSandboxBrushSize}
                             brushShape={sandboxBrushShape}
                             setBrushShape={setSandboxBrushShape}
-                            isSimulationRunning={sandboxSimRunning}
+                            simRunning={sandboxSimRunning}
+                            setSimRunning={setSandboxSimRunning}
                             onToggleSimulation={() => {
                                 if (!engineRef.current) return;
                                 const mode = engineRef.current.activeMode;
@@ -703,8 +885,12 @@ const App: React.FC = () => {
                             }}
                         />
                     )}
+
+                    <OrientationOverlay />
                 </>
             )}
+
+            {!gameStarted && <OrientationOverlay />}
 
             {/* Background Canvas (Blurred when Menu is open) */}
             <div className={`w-full h-full transition-all duration-700 ${!gameStarted ? 'blur-sm scale-105 opacity-80' : ''}`}>

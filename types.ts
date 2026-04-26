@@ -74,6 +74,7 @@ export interface Player {
   peakMaterial: number; // Highest material score achieved
   kills: number;
   kingsKilled: number;
+  unitsLost: number; // Track casualties
   lastScoreTime: number;
 
   // Combat Tracking
@@ -127,6 +128,10 @@ export interface LeaderboardEntry {
   isHuman: boolean;
   color: string;
   score: number;
+  kills: number;
+  kingsKilled: number;
+  coins: number;
+  unitsLost: number;
   rank: number;
 }
 
