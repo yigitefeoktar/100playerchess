@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">100 Player Chess app icon</title>
+  <desc id="desc">A game board colored background with a blue pawn and the text 100.</desc>
+  <defs>
+    <filter id="blue-glow" x="-45%" y="-45%" width="190%" height="190%">
+      <feGaussianBlur stdDeviation="9" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+    <filter id="cyan-glow" x="-35%" y="-35%" width="170%" height="170%">
+      <feGaussianBlur stdDeviation="3" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect width="512" height="512" fill="#050a0f" />
+  <g fill="#131b26">
+    <rect x="0" y="0" width="64" height="64" />
+    <rect x="128" y="0" width="64" height="64" />
+    <rect x="256" y="0" width="64" height="64" />
+    <rect x="384" y="0" width="64" height="64" />
+    <rect x="64" y="64" width="64" height="64" />
+    <rect x="192" y="64" width="64" height="64" />
+    <rect x="320" y="64" width="64" height="64" />
+    <rect x="448" y="64" width="64" height="64" />
+    <rect x="0" y="128" width="64" height="64" />
+    <rect x="128" y="128" width="64" height="64" />
+    <rect x="256" y="128" width="64" height="64" />
+    <rect x="384" y="128" width="64" height="64" />
+    <rect x="64" y="192" width="64" height="64" />
+    <rect x="192" y="192" width="64" height="64" />
+    <rect x="320" y="192" width="64" height="64" />
+    <rect x="448" y="192" width="64" height="64" />
+    <rect x="0" y="256" width="64" height="64" />
+    <rect x="128" y="256" width="64" height="64" />
+    <rect x="256" y="256" width="64" height="64" />
+    <rect x="384" y="256" width="64" height="64" />
+    <rect x="64" y="320" width="64" height="64" />
+    <rect x="192" y="320" width="64" height="64" />
+    <rect x="320" y="320" width="64" height="64" />
+    <rect x="448" y="320" width="64" height="64" />
+    <rect x="0" y="384" width="64" height="64" />
+    <rect x="128" y="384" width="64" height="64" />
+    <rect x="256" y="384" width="64" height="64" />
+    <rect x="384" y="384" width="64" height="64" />
+    <rect x="64" y="448" width="64" height="64" />
+    <rect x="192" y="448" width="64" height="64" />
+    <rect x="320" y="448" width="64" height="64" />
+    <rect x="448" y="448" width="64" height="64" />
+  </g>
+
+  <rect width="512" height="512" fill="#050a0f" opacity="0.18" />
+  <text
+    x="256"
+    y="304"
+    text-anchor="middle"
+    dominant-baseline="middle"
+    font-family="Segoe UI Symbol, DejaVu Sans, Symbola, Arial, sans-serif"
+    font-size="260"
+    fill="#3b82f6"
+    filter="url(#blue-glow)">&#9823;&#65038;</text>
+  <text
+    x="256"
+    y="406"
+    text-anchor="middle"
+    dominant-baseline="middle"
+    font-family="Inter, system-ui, sans-serif"
+    font-size="104"
+    font-weight="900"
+    fill="#ffffff"
+    filter="url(#cyan-glow)"
+    letter-spacing="0">100</text>
+  <text
+    x="260"
+    y="406"
+    text-anchor="middle"
+    dominant-baseline="middle"
+    font-family="Inter, system-ui, sans-serif"
+    font-size="104"
+    font-weight="900"
+    fill="#00f0ff"
+    opacity="0.45"
+    letter-spacing="0">100</text>
+</svg>
